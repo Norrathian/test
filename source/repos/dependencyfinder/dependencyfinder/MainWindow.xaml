@@ -1,0 +1,204 @@
+﻿<Window x:Class="dependencyfinder.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:dependencyfinder"
+        mc:Ignorable="d"
+        Title="Dependency Finder" Height="600" Width="1000"
+        WindowStartupLocation="CenterScreen">
+    <Window.Resources>
+        <!-- Base Styles -->
+        <Style TargetType="Window">
+            <Setter Property="Background" Value="{DynamicResource BackgroundBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}"/>
+        </Style>
+
+        <Style TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource ButtonBackground}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Padding" Value="15,5"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource ButtonHoverBackground}"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Background" Value="{DynamicResource ButtonDisabledBackground}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style TargetType="ComboBox">
+            <Setter Property="Background" Value="{DynamicResource ListViewBackground}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="5"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}"/>
+        </Style>
+
+        <Style TargetType="ListView">
+            <Setter Property="Background" Value="{DynamicResource ListViewBackground}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ListViewBorder}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Margin" Value="0,10,0,0"/>
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}"/>
+        </Style>
+
+        <Style TargetType="GridViewColumnHeader">
+            <Setter Property="Background" Value="{DynamicResource BackgroundBrush}"/>
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="BorderThickness" Value="0,0,1,1"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ListViewBorder}"/>
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}"/>
+        </Style>
+
+        <Style x:Key="SearchTextBoxStyle" TargetType="TextBox">
+            <Setter Property="Background" Value="{DynamicResource ListViewBackground}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="5"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="FontStyle" Value="Italic"/>
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}"/>
+            <Style.Triggers>
+                <Trigger Property="IsFocused" Value="True">
+                    <Setter Property="FontStyle" Value="Normal"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <DockPanel>
+        <Menu DockPanel.Dock="Top">
+            <MenuItem Header="_File">
+                <MenuItem Header="_Export" Click="ExportButton_Click" IsEnabled="{Binding ElementName=ExportButton, Path=IsEnabled}"/>
+                <Separator/>
+                <MenuItem Header="E_xit" Click="ExitMenuItem_Click"/>
+            </MenuItem>
+            <MenuItem Header="_Edit">
+                <MenuItem Header="_Copy" Click="CopyMenuItem_Click"/>
+                <MenuItem Header="Select _All" Click="SelectAllMenuItem_Click"/>
+            </MenuItem>
+            <MenuItem Header="_View">
+                <MenuItem Header="_Dark Mode" IsCheckable="True" Click="ToggleDarkMode_Click"/>
+            </MenuItem>
+            <MenuItem Header="_Help">
+                <MenuItem Header="_About" Click="AboutMenuItem_Click"/>
+            </MenuItem>
+        </Menu>
+
+        <Grid Margin="20">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Search Box -->
+            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,15">
+                <TextBox x:Name="SearchTextBox" 
+                         Width="300" 
+                         Style="{StaticResource SearchTextBoxStyle}"
+                         Text="Search libraries..."
+                         GotFocus="SearchTextBox_GotFocus"
+                         LostFocus="SearchTextBox_LostFocus"
+                         TextChanged="SearchTextBox_TextChanged"/>
+            </StackPanel>
+
+            <!-- Language and Project Type Selection -->
+            <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,15">
+                <TextBlock Text="Language:" VerticalAlignment="Center" Margin="0,0,10,0" FontWeight="SemiBold"/>
+                <ComboBox x:Name="LanguageComboBox" Width="120" SelectionChanged="LanguageComboBox_SelectionChanged"
+                          ToolTip="Select the programming language">
+                    <ComboBoxItem Content="C#"/>
+                    <ComboBoxItem Content="Python"/>
+                    <ComboBoxItem Content="JavaScript"/>
+                    <ComboBoxItem Content="Java"/>
+                </ComboBox>
+                <TextBlock Text="Project Type:" VerticalAlignment="Center" Margin="20,0,10,0" FontWeight="SemiBold"/>
+                <ComboBox x:Name="ProjectTypeComboBox" Width="200" SelectionChanged="ProjectTypeComboBox_SelectionChanged"
+                          ToolTip="Select the project type"/>
+                <Button x:Name="LoadButton" Content="Load Recommendations" Margin="20,0,0,0" 
+                        Click="LoadButton_Click" IsEnabled="False"
+                        ToolTip="Load recommended dependencies for the selected project type"/>
+            </StackPanel>
+
+            <!-- File Selection -->
+            <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,15">
+                <Button x:Name="BrowseButton" Content="Select File..." Width="100" Click="BrowseButton_Click"
+                        ToolTip="Select a project file to analyze"/>
+                <TextBlock x:Name="SelectedFolderText" Margin="10,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap"/>
+            </StackPanel>
+
+            <!-- Additional Options -->
+            <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,0,0,15">
+                <Button x:Name="ExportButton" Content="Export Dependencies" Width="140" Click="ExportButton_Click" 
+                        IsEnabled="False" ToolTip="Export the dependency list to a file"/>
+                <ComboBox x:Name="ExportFormatComboBox" Width="100" Margin="10,0,0,0" 
+                          ToolTip="Select export format">
+                    <ComboBoxItem Content="CSV"/>
+                    <ComboBoxItem Content="JSON"/>
+                    <ComboBoxItem Content="XML"/>
+                </ComboBox>
+            </StackPanel>
+
+            <!-- Progress Indicators -->
+            <ProgressBar x:Name="ScanProgressBar" Grid.Row="4" Height="4" Minimum="0" Maximum="100" 
+                        Visibility="Collapsed" Margin="0,0,0,5"/>
+            <TextBlock x:Name="LoadingText" Grid.Row="4" Text="Loading..." FontStyle="Italic" 
+                       Foreground="#757575" Visibility="Collapsed" Margin="0,0,0,5"/>
+
+            <!-- Libraries List -->
+            <ListView x:Name="LibraryListView" Grid.Row="4">
+                <ListView.View>
+                    <GridView>
+                        <GridViewColumn Header="Name" Width="150" DisplayMemberBinding="{Binding Name}"/>
+                        <GridViewColumn Header="Version" Width="100" DisplayMemberBinding="{Binding Version}"/>
+                        <GridViewColumn Header="Required" Width="100" DisplayMemberBinding="{Binding RequiredVersion}"/>
+                        <GridViewColumn Header="Purpose" Width="200" DisplayMemberBinding="{Binding Purpose}"/>
+                        <GridViewColumn Header="Description" Width="200" DisplayMemberBinding="{Binding Description}"/>
+                        <GridViewColumn Header="Action" Width="100">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Button Content="{Binding ActionText}"
+                                            Tag="{Binding}"
+                                            Click="CopyButton_Click"
+                                            Background="#4CAF50"
+                                            Margin="2"
+                                            ToolTip="Copy dependency information to clipboard"/>
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+                    </GridView>
+                </ListView.View>
+            </ListView>
+
+            <!-- Status Bar -->
+            <StatusBar Grid.Row="5" Background="#E0E0E0">
+                <StatusBarItem>
+                    <TextBlock x:Name="StatusText" Text="Ready"/>
+                </StatusBarItem>
+                <StatusBarItem HorizontalAlignment="Right">
+                    <TextBlock x:Name="VersionText" Text="v1.0.0"/>
+                </StatusBarItem>
+            </StatusBar>
+        </Grid>
+    </DockPanel>
+</Window>
