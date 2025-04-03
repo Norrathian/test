@@ -1,0 +1,1059 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Bat Collector</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body { margin: 0; overflow: hidden; background: #1a1a1a; }
+        #gameCanvas { display: block; margin: 20px auto; border: 2px solid #ffd700; box-shadow: 0 0 20px rgba(255, 215, 0, 0.8); background: radial-gradient(circle, #2a2a2a, #1a1a1a); }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="1200" height="800"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const CONFIG = {
+            CANVAS_WIDTH: 1200,
+            CANVAS_HEIGHT: 800,
+            BAT_WIDTH: 32,
+            BAT_HEIGHT: 32,
+            BAT_SCALE: 2,
+            BASE_MOVE_SPEED: 5,
+            DASH_SPEED: 15,
+            DASH_MAX_COOLDOWN: 300,
+            COIN_WIDTH: 40,
+            COIN_HEIGHT: 44,
+            COIN_SCALE: 0.5,
+            PROJECTILE_WIDTH: 20,
+            PROJECTILE_HEIGHT: 10,
+            BASE_PROJECTILE_SPEED: 10,
+            BOSS_WIDTH: 200,
+            BOSS_HEIGHT: 195,
+            BOSS_MAX_HEALTH: 20000,
+            WORLD_WIDTH: 2400,
+            WORLD_HEIGHT: 1600,
+            BG_SPEED_1: 2,
+            BG_SPEED_2: 1,
+            BG_SPEED_3: 0.5,
+            MAX_PARTICLES: 150,
+            POWERUP_WIDTH: 30,
+            POWERUP_HEIGHT: 30,
+            POWERUP_DURATION: 240,
+            BOSS_PROJECTILE_WIDTH: 40,
+            BOSS_PROJECTILE_HEIGHT: 40,
+            WASP_WIDTH: 24,
+            WASP_HEIGHT: 20,
+            GHOST_WIDTH: 30,
+            GHOST_HEIGHT: 30,
+            SPIDER_WIDTH: 20,
+            SPIDER_HEIGHT: 16
+        };
+
+        // Assets
+        const batSprite = new Image(); batSprite.src = 'assets/sprites/batsprite.png';
+        const coinSprite = new Image(); coinSprite.src = 'assets/sprites/coin.png';
+        const bgLayer1 = new Image(); bgLayer1.src = 'assets/sprites/layer1.png';
+        const bgLayer2 = new Image(); bgLayer2.src = 'assets/sprites/layer2.png';
+        const bgLayer3 = new Image(); bgLayer3.src = 'assets/sprites/layer3.png';
+        const batBoltSprite = new Image(); batBoltSprite.src = 'assets/sprites/batbolt.png';
+        const spiderSprites = [new Image(), new Image(), new Image(), new Image()];
+        spiderSprites[0].src = 'assets/sprites/spider1.png';
+        spiderSprites[1].src = 'assets/sprites/spider2.png';
+        spiderSprites[2].src = 'assets/sprites/spider3.png';
+        spiderSprites[3].src = 'assets/sprites/spider4.png';
+        const waspSprite = new Image(); waspSprite.src = 'assets/sprites/wasp.png';
+        const ghostSprite = new Image(); ghostSprite.src = 'assets/sprites/ghost.png';
+        const powerUpSprite = new Image(); powerUpSprite.src = 'assets/sprites/powerup.png';
+        const powerUpInvincibilitySprite = new Image(); powerUpInvincibilitySprite.src = 'assets/sprites/invincible.png';
+        const powerUpDoubleShotSprite = new Image(); powerUpDoubleShotSprite.src = 'assets/sprites/doubleshot.png';
+        const bossSprite = new Image(); bossSprite.src = 'assets/sprites/boss.png';
+        const fireballSprite = new Image(); fireballSprite.src = 'assets/sprites/fireball.png';
+        const coinSound = new Audio('assets/audio/coin.mp3');
+        const spiderSound = new Audio('assets/audio/spider.wav');
+        const fireballSound = new Audio('assets/audio/fireball.mp3');
+        const backgroundMusic = new Audio('assets/audio/backmusic.mp3');
+        backgroundMusic.loop = true;
+        const bossMusic = new Audio('assets/audio/bossmusic.mp3');
+        bossMusic.loop = true;
+
+        // Game variables
+        const totalBatFrames = 4;
+        let batFrame = 0, frameCount = 0, frameSpeed = 10;
+        let batX = CONFIG.CANVAS_WIDTH / 2 - CONFIG.BAT_WIDTH / 2, batY = CONFIG.CANVAS_HEIGHT / 2 - CONFIG.BAT_HEIGHT / 2;
+        let baseMoveSpeed = CONFIG.BASE_MOVE_SPEED, moveSpeed = baseMoveSpeed, keys = {}, scale = CONFIG.BAT_SCALE;
+        let batVX = 0, batVY = 0, targetVX = 0, targetVY = 0;
+        const acceleration = 0.3, deceleration = 0.2;
+
+        const totalCoinFrames = 4;
+        let coinFrame = 0, coinFrameCount = 0, coinFrameSpeed = 10;
+        let coins = [], maxCoins = 5, coinScore = 0, killScore = 0;
+        let coinScale = CONFIG.COIN_SCALE;
+        let coinSpinTimer = 0;
+
+        const projectileWidth = CONFIG.PROJECTILE_WIDTH;
+        const projectileHeight = CONFIG.PROJECTILE_HEIGHT;
+        let projectiles = [];
+        const projectilePool = [];
+        const baseProjectileSpeed = CONFIG.BASE_PROJECTILE_SPEED, projectileSpeed = baseProjectileSpeed;
+        let baseBossDamage = 100, bossDamage = baseBossDamage;
+
+        const spiderWidth = CONFIG.SPIDER_WIDTH, spiderHeight = CONFIG.SPIDER_HEIGHT, totalSpiderFrames = 4;
+        let spiderFrame = 0, spiders = [], maxSpiders = 2, baseSpiderSpeed = 3;
+        const spiderPool = [];
+
+        const waspWidth = CONFIG.WASP_WIDTH, waspHeight = CONFIG.WASP_HEIGHT;
+        let wasps = [], maxWasps = 0, baseWaspSpeed = 5;
+        const waspPool = [];
+
+        const ghostWidth = CONFIG.GHOST_WIDTH, ghostHeight = CONFIG.GHOST_HEIGHT;
+        let ghosts = [], maxGhosts = 0, baseGhostSpeed = 4;
+        const ghostPool = [];
+
+        const powerUpWidth = CONFIG.POWERUP_WIDTH, powerUpHeight = CONFIG.POWERUP_HEIGHT;
+        let powerUps = [], basePowerUpDuration = CONFIG.POWERUP_DURATION, powerUpDuration = basePowerUpDuration;
+        let speedBoostTimer = 0, invincibilityTimer = 0, doubleShotTimer = 0;
+
+        const bossProjectileWidth = CONFIG.BOSS_PROJECTILE_WIDTH;
+        const bossProjectileHeight = CONFIG.BOSS_PROJECTILE_HEIGHT;
+        let bossProjectiles = [];
+
+        const bossWidth = CONFIG.BOSS_WIDTH, bossHeight = CONFIG.BOSS_HEIGHT;
+        let boss = null, bossHealth = CONFIG.BOSS_MAX_HEALTH, bossMaxHealth = CONFIG.BOSS_MAX_HEALTH;
+
+        let particles = [];
+        let batTrail = [];
+        let lives = 3;
+        let level = 1;
+        let shakeTimer = 0, shakeOffsetX = 0, shakeOffsetY = 0, shakeIntensity = 1;
+        let victoryFadeTimer = 0;
+        let hudPulse = 0;
+        let achievementTimer = 0;
+        let bgPulse = 0;
+
+        const STATE_TITLE = 'title', STATE_PLAYING = 'playing', STATE_GAME_OVER = 'gameOver', STATE_VICTORY = 'victory', STATE_SHOP = 'shop', STATE_PAUSED = 'paused', STATE_INITIALS = 'initials';
+        let gameState = STATE_TITLE;
+
+        const worldWidth = CONFIG.WORLD_WIDTH, worldHeight = CONFIG.WORLD_HEIGHT;
+        let bgScrollX1 = 0, bgScrollX2 = 0, bgScrollX3 = 0;
+        let bgScrollY1 = 0, bgScrollY2 = 0, bgScrollY3 = 0;
+        const baseBgSpeed1 = CONFIG.BG_SPEED_1, baseBgSpeed2 = CONFIG.BG_SPEED_2, baseBgSpeed3 = CONFIG.BG_SPEED_3;
+        let bgSpeed1 = baseBgSpeed1, bgSpeed2 = baseBgSpeed2, bgSpeed3 = baseBgSpeed3;
+        const maxScrollX = worldWidth - CONFIG.CANVAS_WIDTH;
+        const maxScrollY = worldHeight - CONFIG.CANVAS_HEIGHT;
+        const scaleLayer2 = 0.75, scaleLayer3 = 0.5;
+
+        const bgCanvas = document.createElement('canvas');
+        bgCanvas.width = CONFIG.CANVAS_WIDTH;
+        bgCanvas.height = CONFIG.CANVAS_HEIGHT;
+        const bgCtx = bgCanvas.getContext('2d');
+        let bgDirty = true;
+
+        let upgrades = {
+            speed: { level: 0, cost: 10, maxLevel: 5, increment: 0.5 },
+            invincibility: { level: 0, cost: 15, maxLevel: 5, increment: 60 },
+            projectile: { level: 0, cost: 20, maxLevel: 5, increment: 50 }
+        };
+        let selectedUpgrade = 0;
+
+        let achievements = {
+            coins100: { name: 'Coin Hoarder', desc: 'Collect 100 coins', goal: 100, progress: 0, unlocked: false },
+            kills50: { name: 'Slayer', desc: 'Kill 50 enemies', goal: 50, progress: 0, unlocked: false },
+            level5: { name: 'Explorer', desc: 'Reach Level 5', goal: 5, progress: 0, unlocked: false }
+        };
+
+        let highScore = localStorage.getItem('highScore') || 0;
+        let highScoreInitials = localStorage.getItem('highScoreInitials') || 'AAA';
+        let initials = ['A', 'A', 'A'], currentInitial = 0;
+
+        // Functions
+        function getProjectile(x, y, speed, angle = null) {
+            let p = projectilePool.length ? projectilePool.pop() : { hitThisFrame: false };
+            p.x = x;
+            p.y = y;
+            p.speed = speed;
+            p.angle = angle;
+            p.hitThisFrame = false;
+            return p;
+        }
+
+        function recycleProjectile(projectile) {
+            projectilePool.push(projectile);
+        }
+
+        function getSpider() {
+            let s = spiderPool.length ? spiderPool.pop() : {};
+            s.x = CONFIG.CANVAS_WIDTH + Math.random() * 100;
+            s.y = Math.random() * (CONFIG.CANVAS_HEIGHT - spiderHeight * scale);
+            s.speed = baseSpiderSpeed + (level - 1) * 0.5;
+            s.targetY = batY;
+            s.waveOffset = Math.random() * Math.PI * 2;
+            return s;
+        }
+
+        function recycleSpider(spider) {
+            spiderPool.push(spider);
+        }
+
+        function getWasp() {
+            let w = waspPool.length ? waspPool.pop() : {};
+            w.x = CONFIG.CANVAS_WIDTH + Math.random() * 100;
+            w.y = Math.random() * (CONFIG.CANVAS_HEIGHT - waspHeight * scale);
+            w.speed = baseWaspSpeed + (level - 1) * 0.3;
+            w.targetY = batY;
+            w.dodgeTimer = 30;
+            return w;
+        }
+
+        function recycleWasp(wasp) {
+            waspPool.push(wasp);
+        }
+
+        function getGhost() {
+            let g = ghostPool.length ? ghostPool.pop() : {};
+            g.x = CONFIG.CANVAS_WIDTH + Math.random() * 100;
+            g.y = Math.random() * (CONFIG.CANVAS_HEIGHT - ghostHeight * scale);
+            g.speed = baseGhostSpeed + (level - 1) * 0.2;
+            g.targetX = batX;
+            g.targetY = batY;
+            g.phaseTimer = 60;
+            g.isPhased = false;
+            return g;
+        }
+
+        function recycleGhost(ghost) {
+            ghostPool.push(ghost);
+        }
+
+        function spawnCoin() {
+            console.log('Spawning coin');
+            const x = Math.random() * (CONFIG.CANVAS_WIDTH - CONFIG.COIN_WIDTH * coinScale);
+            const y = Math.random() * (CONFIG.CANVAS_HEIGHT - CONFIG.COIN_HEIGHT * coinScale);
+            coins.push({ x: Math.max(0, Math.min(x, CONFIG.CANVAS_WIDTH - CONFIG.COIN_WIDTH * coinScale)), y: Math.max(0, Math.min(y, CONFIG.CANVAS_HEIGHT - CONFIG.COIN_HEIGHT * coinScale)) });
+        }
+
+        function spawnSpider() {
+            console.log('Spawning spider');
+            spiders.push(getSpider());
+        }
+
+        function spawnWasp() {
+            console.log('Spawning wasp');
+            wasps.push(getWasp());
+        }
+
+        function spawnGhost() {
+            console.log('Spawning ghost');
+            ghosts.push(getGhost());
+        }
+
+        function spawnPowerUp() {
+            console.log('Spawning power-up');
+            const x = Math.random() * (CONFIG.CANVAS_WIDTH - powerUpWidth * coinScale);
+            const y = Math.random() * (CONFIG.CANVAS_HEIGHT - powerUpHeight * coinScale);
+            const types = ['speed', 'invincibility', 'doubleShot'];
+            const type = types[Math.floor(Math.random() * types.length)];
+            powerUps.push({ 
+                x: Math.max(0, Math.min(x, CONFIG.CANVAS_WIDTH - powerUpWidth * coinScale)), 
+                y: Math.max(0, Math.min(y, CONFIG.CANVAS_HEIGHT - powerUpHeight * coinScale)), 
+                type: type 
+            });
+        }
+
+        function spawnBoss() {
+            console.log('Spawning boss');
+            boss = {
+                x: CONFIG.CANVAS_WIDTH - bossWidth * scale,
+                y: CONFIG.CANVAS_HEIGHT / 2 - (bossHeight * scale / 2),
+                speed: 4,
+                health: bossMaxHealth,
+                shootTimer: 60,
+                directionX: 0,
+                directionY: 0,
+                changeDirectionTimer: 30
+            };
+            bossProjectiles = [];
+            backgroundMusic.pause();
+            bossMusic.play().catch((e) => console.error('Failed to play boss music:', e));
+        }
+
+        function spawnParticles(x, y, count = 10) {
+            if (particles.length >= CONFIG.MAX_PARTICLES) return;
+            for (let i = 0; i < count && particles.length < CONFIG.MAX_PARTICLES; i++) {
+                const size = 2 + Math.random() * 3;
+                particles.push({
+                    x, y,
+                    vx: (Math.random() - 0.5) * 4,
+                    vy: (Math.random() - 0.5) * 4,
+                    life: 30,
+                    maxLife: 30,
+                    size: size,
+                    color: `hsl(${Math.random() * 60 + 40}, 100%, 50%)`
+                });
+            }
+        }
+
+        function drawBackground() {
+            if (!bgDirty) return;
+            console.log('Drawing background');
+            bgCtx.clearRect(0, 0, CONFIG.CANVAS_WIDTH, CONFIG.CANVAS_HEIGHT);
+            if (bgLayer3.complete) {
+                const w3 = worldWidth * scaleLayer3, h3 = worldHeight * scaleLayer3;
+                bgCtx.drawImage(bgLayer3, -bgScrollX3, -bgScrollY3 + Math.sin(bgPulse) * 5, w3, h3);
+            }
+            if (bgLayer2.complete) {
+                const w2 = worldWidth * scaleLayer2, h2 = worldHeight * scaleLayer2;
+                bgCtx.drawImage(bgLayer2, -bgScrollX2, -bgScrollY2 + Math.sin(bgPulse * 0.8) * 3, w2, h2);
+            }
+            if (bgLayer1.complete) {
+                bgCtx.drawImage(bgLayer1, -bgScrollX1, -bgScrollY1 + Math.sin(bgPulse * 0.6) * 2, worldWidth, worldHeight);
+            }
+            bgDirty = false;
+        }
+
+        function updatePlayer(delta) {
+            const currentSpeed = speedBoostTimer > 0 ? moveSpeed * 1.5 : moveSpeed;
+            targetVX = 0;
+            targetVY = 0;
+            if (keys['ArrowUp']) targetVY = -currentSpeed;
+            else if (keys['ArrowDown']) targetVY = currentSpeed;
+            if (keys['ArrowLeft']) targetVX = -currentSpeed;
+            else if (keys['ArrowRight']) targetVX = currentSpeed;
+
+            if (targetVX > batVX) batVX = Math.min(batVX + acceleration, targetVX);
+            else if (targetVX < batVX) batVX = Math.max(batVX - acceleration, targetVX);
+            else batVX = Math.abs(batVX) > deceleration ? batVX - Math.sign(batVX) * deceleration : 0;
+
+            if (targetVY > batVY) batVY = Math.min(batVY + acceleration, targetVY);
+            else if (targetVY < batVY) batVY = Math.max(batVY - acceleration, targetVY);
+            else batVY = Math.abs(batVY) > deceleration ? batVY - Math.sign(batVY) * deceleration : 0;
+
+            batX += batVX;
+            batY += batVY;
+            batX = Math.max(0, Math.min(batX, CONFIG.CANVAS_WIDTH - CONFIG.BAT_WIDTH * CONFIG.BAT_SCALE));
+            batY = Math.max(0, Math.min(batY, CONFIG.CANVAS_HEIGHT - CONFIG.BAT_HEIGHT * CONFIG.BAT_SCALE));
+        }
+
+        function checkAchievements() {
+            if (!achievements.coins100.unlocked && coinScore >= achievements.coins100.goal) {
+                achievements.coins100.unlocked = true;
+                achievementTimer = 120;
+            }
+            if (!achievements.kills50.unlocked && killScore >= achievements.kills50.goal) {
+                achievements.kills50.unlocked = true;
+                achievementTimer = 120;
+            }
+            if (!achievements.level5.unlocked && level >= achievements.level5.goal) {
+                achievements.level5.unlocked = true;
+                achievementTimer = 120;
+            }
+            achievements.coins100.progress = coinScore;
+            achievements.kills50.progress = killScore;
+            achievements.level5.progress = level;
+        }
+
+        document.addEventListener('keydown', (event) => {
+            console.log(`Key pressed: ${event.key}`);
+            if (gameState === STATE_TITLE && event.key === 'Enter') {
+                console.log('Switching to playing state');
+                gameState = STATE_PLAYING;
+                resetGame();
+                backgroundMusic.play().catch((e) => console.error('Failed to play background music:', e));
+            } else if (gameState === STATE_PLAYING && event.key === ' ') {
+                console.log('Shooting projectile');
+                projectiles.push(getProjectile(batX + CONFIG.BAT_WIDTH * scale, batY + CONFIG.BAT_HEIGHT * scale / 2 - CONFIG.PROJECTILE_HEIGHT / 2, projectileSpeed));
+                if (doubleShotTimer > 0) {
+                    projectiles.push(getProjectile(batX + CONFIG.BAT_WIDTH * scale, batY + CONFIG.BAT_HEIGHT * scale / 2 - CONFIG.PROJECTILE_HEIGHT / 2 - 10, projectileSpeed * 0.9));
+                    projectiles.push(getProjectile(batX + CONFIG.BAT_WIDTH * scale, batY + CONFIG.BAT_HEIGHT * scale / 2 - CONFIG.PROJECTILE_HEIGHT / 2 + 10, projectileSpeed * 1.1));
+                }
+            } else if (gameState === STATE_PLAYING && event.key === 'p') {
+                gameState = STATE_PAUSED;
+                backgroundMusic.pause();
+                bossMusic.pause();
+            } else if (gameState === STATE_PLAYING && event.key === 'q') {
+                gameState = STATE_SHOP;
+                backgroundMusic.pause();
+                bossMusic.pause();
+            } else if (gameState === STATE_PLAYING) {
+                keys[event.key] = true;
+            } else if (gameState === STATE_PAUSED) {
+                if (event.key === 'p') {
+                    gameState = STATE_PLAYING;
+                    if (level >= 9) bossMusic.play().catch((e) => console.error('Failed to resume boss music:', e));
+                    else backgroundMusic.play().catch((e) => console.error('Failed to resume background music:', e));
+                } else if (event.key === 'r') {
+                    gameState = STATE_PLAYING;
+                    resetGame();
+                    backgroundMusic.play().catch((e) => console.error('Failed to play background music:', e));
+                } else if (event.key === 'q') {
+                    gameState = STATE_SHOP;
+                }
+            } else if ((gameState === STATE_GAME_OVER || gameState === STATE_VICTORY) && event.key === 'Enter') {
+                if (gameState === STATE_GAME_OVER && coinScore > highScore) {
+                    gameState = STATE_INITIALS;
+                    initials = ['A', 'A', 'A'];
+                    currentInitial = 0;
+                } else {
+                    gameState = STATE_SHOP;
+                    backgroundMusic.pause();
+                    bossMusic.pause();
+                }
+            } else if (gameState === STATE_INITIALS) {
+                if (event.key === 'ArrowUp') {
+                    let code = initials[currentInitial].charCodeAt(0);
+                    initials[currentInitial] = String.fromCharCode(code === 90 ? 65 : code + 1);
+                } else if (event.key === 'ArrowDown') {
+                    let code = initials[currentInitial].charCodeAt(0);
+                    initials[currentInitial] = String.fromCharCode(code === 65 ? 90 : code - 1);
+                } else if (event.key === 'ArrowRight' && currentInitial < 2) {
+                    currentInitial++;
+                } else if (event.key === 'ArrowLeft' && currentInitial > 0) {
+                    currentInitial--;
+                } else if (event.key === 'Enter') {
+                    highScore = coinScore;
+                    highScoreInitials = initials.join('');
+                    localStorage.setItem('highScore', highScore);
+                    localStorage.setItem('highScoreInitials', highScoreInitials);
+                    gameState = STATE_SHOP;
+                    backgroundMusic.pause();
+                    bossMusic.pause();
+                }
+            } else if (gameState === STATE_SHOP) {
+                if (event.key === 'ArrowUp' && selectedUpgrade > 0) selectedUpgrade--;
+                else if (event.key === 'ArrowDown' && selectedUpgrade < 2) selectedUpgrade++;
+                else if (event.key === 'Enter') {
+                    const upgradeKeys = ['speed', 'invincibility', 'projectile'];
+                    const upgrade = upgrades[upgradeKeys[selectedUpgrade]];
+                    if (coinScore >= upgrade.cost && upgrade.level < upgrade.maxLevel) {
+                        coinScore -= upgrade.cost;
+                        upgrade.level++;
+                        upgrade.cost = Math.floor(upgrade.cost * 1.5);
+                        if (upgradeKeys[selectedUpgrade] === 'speed') moveSpeed = baseMoveSpeed + upgrade.level * upgrade.increment;
+                        else if (upgradeKeys[selectedUpgrade] === 'invincibility') powerUpDuration = basePowerUpDuration + upgrade.level * upgrade.increment;
+                        else if (upgradeKeys[selectedUpgrade] === 'projectile') bossDamage = baseBossDamage + upgrade.level * upgrade.increment;
+                    }
+                } else if (event.key === 'c') {
+                    gameState = STATE_PLAYING;
+                    if (level >= 9) bossMusic.play().catch((e) => console.error('Failed to resume boss music:', e));
+                    else backgroundMusic.play().catch((e) => console.error('Failed to resume background music:', e));
+                } else if (event.key === 'q') {
+                    gameState = STATE_TITLE;
+                }
+            }
+        });
+        document.addEventListener('keyup', (event) => keys[event.key] = false);
+
+        function resetGame() {
+            console.log('Resetting game');
+            batX = CONFIG.CANVAS_WIDTH / 2 - CONFIG.BAT_WIDTH / 2;
+            batY = CONFIG.CANVAS_HEIGHT / 2 - CONFIG.BAT_HEIGHT / 2;
+            batVX = 0;
+            batVY = 0;
+            coins = [];
+            projectiles = [];
+            spiders = [];
+            wasps = [];
+            ghosts = [];
+            powerUps = [];
+            boss = null;
+            bossProjectiles = [];
+            batTrail = [];
+            bgDirty = true;
+            killScore = 0;
+            lives = 3;
+            level = 1;
+            speedBoostTimer = 0;
+            invincibilityTimer = 0;
+            doubleShotTimer = 0;
+            shakeTimer = 0;
+            victoryFadeTimer = 0;
+            achievementTimer = 0;
+            for (let i = 0; i < maxCoins; i++) spawnCoin();
+            for (let i = 0; i < maxSpiders; i++) spawnSpider();
+        }
+
+        let lastTime = 0;
+        function gameLoop(timestamp) {
+            console.log(`Game loop running, state: ${gameState}, level: ${level}`);
+            const delta = Math.min((timestamp - lastTime) / 1000, 0.1);
+            lastTime = timestamp;
+
+            ctx.clearRect(0, 0, CONFIG.CANVAS_WIDTH, CONFIG.CANVAS_HEIGHT);
+            ctx.save();
+            if (shakeTimer > 0) {
+                shakeOffsetX = (Math.random() - 0.5) * 20 * shakeIntensity;
+                shakeOffsetY = (Math.random() - 0.5) * 20 * shakeIntensity;
+                ctx.translate(shakeOffsetX, shakeOffsetY);
+                shakeTimer--;
+            }
+
+            bgScrollX1 += batVX * bgSpeed1 * delta;
+            bgScrollX2 += batVX * bgSpeed2 * delta;
+            bgScrollX3 += batVX * bgSpeed3 * delta;
+            bgScrollY1 += batVY * bgSpeed1 * delta;
+            bgScrollY2 += batVY * bgSpeed2 * delta;
+            bgScrollY3 += batVY * bgSpeed3 * delta;
+
+            bgScrollX1 = Math.max(0, Math.min(bgScrollX1, maxScrollX));
+            bgScrollX2 = Math.max(0, Math.min(bgScrollX2, maxScrollX));
+            bgScrollX3 = Math.max(0, Math.min(bgScrollX3, maxScrollX));
+            bgScrollY1 = Math.max(0, Math.min(bgScrollY1, maxScrollY));
+            bgScrollY2 = Math.max(0, Math.min(bgScrollY2, maxScrollY));
+            bgScrollY3 = Math.max(0, Math.min(bgScrollY3, maxScrollY));
+
+            if (batVX !== 0 || batVY !== 0 || gameState === STATE_PLAYING) bgDirty = true;
+            bgPulse += delta;
+            drawBackground();
+            ctx.drawImage(bgCanvas, 0, 0);
+            if (level >= 9) {
+                ctx.fillStyle = 'rgba(255, 0, 0, 0.1)';
+                ctx.fillRect(0, 0, CONFIG.CANVAS_WIDTH, CONFIG.CANVAS_HEIGHT);
+            }
+
+            if (gameState === STATE_TITLE) {
+                console.log('Rendering title screen');
+                ctx.fillStyle = 'white';
+                ctx.font = '40px "Press Start 2P"';
+                ctx.textAlign = 'center';
+                ctx.fillText('Bat Collector', CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 - 120);
+                ctx.font = '16px "Press Start 2P"';
+                ctx.fillText(`High Score: ${highScore} - ${highScoreInitials}`, CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2);
+                ctx.fillText('Arrows: Move', CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 + 40);
+                ctx.fillText('Space: Shoot', CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 + 70);
+                ctx.fillText('P: Pause', CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 + 100);
+                ctx.fillText('Q: Shop', CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 + 130);
+                ctx.fillText('Press Enter to Play', CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 + 230);
+                if (batSprite.complete) {
+                    ctx.drawImage(batSprite, batFrame * CONFIG.BAT_WIDTH, 0, CONFIG.BAT_WIDTH, CONFIG.BAT_HEIGHT, CONFIG.CANVAS_WIDTH / 2 - CONFIG.BAT_WIDTH * scale / 2, CONFIG.CANVAS_HEIGHT / 2 + 230, CONFIG.BAT_WIDTH * scale, CONFIG.BAT_HEIGHT * scale);
+                } else {
+                    ctx.fillStyle = 'red';
+                    ctx.fillRect(CONFIG.CANVAS_WIDTH / 2 - CONFIG.BAT_WIDTH * scale / 2, CONFIG.CANVAS_HEIGHT / 2 + 230, CONFIG.BAT_WIDTH * scale, CONFIG.BAT_HEIGHT * scale);
+                }
+            } else if (gameState === STATE_PLAYING) {
+                if (speedBoostTimer > 0) speedBoostTimer -= delta * 60;
+                if (invincibilityTimer > 0) invincibilityTimer -= delta * 60;
+                if (doubleShotTimer > 0) doubleShotTimer -= delta * 60;
+
+                updatePlayer(delta);
+
+                if (level < 9 && killScore >= level * 25) {
+                    level++;
+                    maxCoins = 5 + Math.floor(level * 1.5);
+                    maxSpiders = 2 + Math.floor(level / 1.5);
+                    maxWasps = Math.floor(level / 2);
+                    maxGhosts = Math.floor(level / 3);
+                    baseSpiderSpeed += 0.4;
+                    spiders.forEach(spider => recycleSpider(spider));
+                    wasps.forEach(wasp => recycleWasp(wasp));
+                    ghosts.forEach(ghost => recycleGhost(ghost));
+                    spiders = [];
+                    wasps = [];
+                    ghosts = [];
+                    for (let i = 0; i < maxSpiders; i++) spawnSpider();
+                    for (let i = 0; i < maxWasps; i++) spawnWasp();
+                    for (let i = 0; i < maxGhosts; i++) spawnGhost();
+                    if (level >= 9) spawnBoss();
+                }
+
+                checkAchievements();
+
+                frameCount++;
+                if (frameCount >= frameSpeed) {
+                    frameCount = 0;
+                    batFrame = (batFrame + 1) % totalBatFrames;
+                    coinFrame = (coinFrame + 1) % totalCoinFrames;
+                    spiderFrame = (spiderFrame + 1) % totalSpiderFrames;
+                }
+                coinSpinTimer += delta * 60;
+                if (coinSpinTimer >= coinFrameSpeed) {
+                    coinSpinTimer = 0;
+                    coinFrame = (coinFrame + 1) % totalCoinFrames;
+                }
+
+                if (invincibilityTimer > 0) {
+                    batTrail.push({ x: batX, y: batY, life: 20 });
+                    for (let i = batTrail.length - 1; i >= 0; i--) {
+                        batTrail[i].life -= delta * 60;
+                        if (batTrail[i].life <= 0) {
+                            batTrail.splice(i, 1);
+                        } else {
+                            ctx.globalAlpha = batTrail[i].life / 20;
+                            if (batSprite.complete) {
+                                ctx.drawImage(batSprite, batFrame * CONFIG.BAT_WIDTH, 0, CONFIG.BAT_WIDTH, CONFIG.BAT_HEIGHT, batTrail[i].x, batTrail[i].y, CONFIG.BAT_WIDTH * scale, CONFIG.BAT_HEIGHT * scale);
+                            }
+                        }
+                    }
+                    ctx.globalAlpha = 1;
+                } else {
+                    batTrail = [];
+                }
+
+                ctx.shadowBlur = invincibilityTimer > 0 && frameCount % 2 === 0 ? 30 : 15;
+                ctx.shadowColor = invincibilityTimer > 0 ? 'rgba(0, 255, 255, 0.8)' : 'rgba(255, 255, 255, 0.4)';
+                if (batSprite.complete) {
+                    ctx.drawImage(batSprite, batFrame * CONFIG.BAT_WIDTH, 0, CONFIG.BAT_WIDTH, CONFIG.BAT_HEIGHT, batX, batY, CONFIG.BAT_WIDTH * scale, CONFIG.BAT_HEIGHT * scale);
+                } else {
+                    ctx.fillStyle = 'red';
+                    ctx.fillRect(batX, batY, CONFIG.BAT_WIDTH * scale, CONFIG.BAT_HEIGHT * scale);
+                }
+                ctx.shadowBlur = 0;
+
+                for (let i = projectiles.length - 1; i >= 0; i--) {
+                    const p = projectiles[i];
+                    p.x += p.speed * delta * 60;
+                    if (batBoltSprite.complete) {
+                        ctx.drawImage(batBoltSprite, p.x, p.y, CONFIG.PROJECTILE_WIDTH, CONFIG.PROJECTILE_HEIGHT);
+                    } else {
+                        ctx.fillStyle = 'blue';
+                        ctx.fillRect(p.x, p.y, CONFIG.PROJECTILE_WIDTH, CONFIG.PROJECTILE_HEIGHT);
+                    }
+                    if (p.x > CONFIG.CANVAS_WIDTH || p.x < -CONFIG.PROJECTILE_WIDTH) {
+                        recycleProjectile(projectiles.splice(i, 1)[0]);
+                        continue;
+                    }
+                    if (level < 9) {
+                        for (let j = spiders.length - 1; j >= 0; j--) {
+                            const spider = spiders[j];
+                            if (checkCollision(p.x, p.y, CONFIG.PROJECTILE_WIDTH, CONFIG.PROJECTILE_HEIGHT, spider.x, spider.y, spiderWidth * scale, spiderHeight * scale)) {
+                                spawnParticles(spider.x, spider.y);
+                                recycleSpider(spiders.splice(j, 1)[0]);
+                                killScore += 1;
+                                recycleProjectile(projectiles.splice(i, 1)[0]);
+                                break;
+                            }
+                        }
+                        if (i < 0) continue;
+                        for (let j = wasps.length - 1; j >= 0; j--) {
+                            const wasp = wasps[j];
+                            if (checkCollision(p.x, p.y, CONFIG.PROJECTILE_WIDTH, CONFIG.PROJECTILE_HEIGHT, wasp.x, wasp.y, waspWidth * scale, waspHeight * scale)) {
+                                spawnParticles(wasp.x, wasp.y);
+                                recycleWasp(wasps.splice(j, 1)[0]);
+                                killScore += 1;
+                                recycleProjectile(projectiles.splice(i, 1)[0]);
+                                break;
+                            }
+                        }
+                        if (i < 0) continue;
+                        for (let j = ghosts.length - 1; j >= 0; j--) {
+                            const ghost = ghosts[j];
+                            if (!ghost.isPhased && checkCollision(p.x, p.y, CONFIG.PROJECTILE_WIDTH, CONFIG.PROJECTILE_HEIGHT, ghost.x, ghost.y, ghostWidth * scale, ghostHeight * scale)) {
+                                spawnParticles(ghost.x, ghost.y);
+                                recycleGhost(ghosts.splice(j, 1)[0]);
+                                killScore += 1;
+                                recycleProjectile(projectiles.splice(i, 1)[0]);
+                                break;
+                            }
+                        }
+                    } else if (boss && checkCollision(p.x, p.y, CONFIG.PROJECTILE_WIDTH, CONFIG.PROJECTILE_HEIGHT, boss.x, boss.y, bossWidth * scale, bossHeight * scale)) {
+                        spawnParticles(p.x, p.y, 15);
+                        boss.health -= bossDamage;
+                        killScore += 1;
+                        shakeTimer = 5;
+                        recycleProjectile(projectiles.splice(i, 1)[0]);
+                        if (boss.health <= 0) {
+                            spawnParticles(boss.x + bossWidth * scale / 2, boss.y + bossHeight * scale / 2, 50);
+                            victoryFadeTimer = 60;
+                        }
+                    }
+                }
+
+                for (let i = coins.length - 1; i >= 0; i--) {
+                    const coin = coins[i];
+                    if (coinSprite.complete) {
+                        ctx.shadowBlur = 10;
+                        ctx.shadowColor = 'rgba(255, 215, 0, 0.8)';
+                        ctx.drawImage(coinSprite, 0, coinFrame * CONFIG.COIN_HEIGHT, CONFIG.COIN_WIDTH, CONFIG.COIN_HEIGHT, coin.x, coin.y, CONFIG.COIN_WIDTH * coinScale, CONFIG.COIN_HEIGHT * coinScale);
+                        ctx.shadowBlur = 0;
+                    } else {
+                        ctx.fillStyle = 'yellow';
+                        ctx.fillRect(coin.x, coin.y, CONFIG.COIN_WIDTH * coinScale, CONFIG.COIN_HEIGHT * coinScale);
+                    }
+                    if (checkCollision(batX, batY, CONFIG.BAT_WIDTH * scale, CONFIG.BAT_HEIGHT * scale, coin.x, coin.y, CONFIG.COIN_WIDTH * coinScale, CONFIG.COIN_HEIGHT * coinScale)) {
+                        console.log('Coin collected');
+                        coins.splice(i, 1);
+                        coinScore += 1;
+                        coinSound.play().catch(e => console.error('Coin sound failed:', e));
+                        spawnParticles(coin.x, coin.y);
+                    }
+                }
+
+                if (level < 9) {
+                    for (let i = spiders.length - 1; i >= 0; i--) {
+                        const spider = spiders[i];
+                        spider.x -= spider.speed * delta * 60;
+                        spider.waveOffset += delta * 5;
+                        spider.y = spider.targetY + Math.sin(spider.waveOffset) * 50;
+                        if (spiderSprites[spiderFrame].complete) {
+                            ctx.drawImage(spiderSprites[spiderFrame], spider.x, spider.y, spiderWidth * scale, spiderHeight * scale);
+                        } else {
+                            ctx.fillStyle = 'green';
+                            ctx.fillRect(spider.x, spider.y, spiderWidth * scale, spiderHeight * scale);
+                        }
+                        if (spider.x < -spiderWidth * scale) {
+                            recycleSpider(spiders.splice(i, 1)[0]);
+                        } else if (invincibilityTimer <= 0 && checkCollision(batX, batY, CONFIG.BAT_WIDTH * scale, CONFIG.BAT_HEIGHT * scale, spider.x, spider.y, spiderWidth * scale, spiderHeight * scale)) {
+                            lives--;
+                            shakeTimer = 8;
+                            spiderSound.play().catch(e => console.error('Spider sound failed:', e));
+                            batX = CONFIG.CANVAS_WIDTH / 2 - CONFIG.BAT_WIDTH / 2;
+                            batY = CONFIG.CANVAS_HEIGHT / 2 - CONFIG.BAT_HEIGHT / 2;
+                            if (lives <= 0) {
+                                gameState = STATE_GAME_OVER;
+                                backgroundMusic.pause();
+                            }
+                            break;
+                        }
+                    }
+
+                    for (let i = wasps.length - 1; i >= 0; i--) {
+                        const wasp = wasps[i];
+                        wasp.x -= wasp.speed * delta * 60;
+                        wasp.y += Math.sign(wasp.targetY - wasp.y) * 1 * delta * 60;
+                        wasp.dodgeTimer--;
+                        let shouldDodge = false;
+                        for (let j = 0; j < projectiles.length; j++) {
+                            const p = projectiles[j];
+                            if (Math.abs(p.x - wasp.x) < 100 && Math.abs(p.y - wasp.y) < 50) {
+                                shouldDodge = true;
+                                break;
+                            }
+                        }
+                        if (wasp.dodgeTimer <= 0 && (Math.random() < 0.1 || shouldDodge)) {
+                            wasp.y += (Math.random() < 0.5 ? -1 : 1) * 80;
+                            wasp.dodgeTimer = 30;
+                        }
+                        if (Math.random() < 0.02) wasp.targetY = batY;
+                        if (waspSprite.complete) {
+                            ctx.drawImage(waspSprite, wasp.x, wasp.y, waspWidth * scale, waspHeight * scale);
+                        } else {
+                            ctx.fillStyle = 'yellow';
+                            ctx.fillRect(wasp.x, wasp.y, waspWidth * scale, waspHeight * scale);
+                        }
+                        if (wasp.x < -waspWidth * scale) {
+                            recycleWasp(wasps.splice(i, 1)[0]);
+                        } else if (invincibilityTimer <= 0 && checkCollision(batX, batY, CONFIG.BAT_WIDTH * scale, CONFIG.BAT_HEIGHT * scale, wasp.x, wasp.y, waspWidth * scale, waspHeight * scale)) {
+                            lives--;
+                            shakeTimer = 8;
+                            spiderSound.play().catch(e => console.error('Spider sound failed:', e));
+                            batX = CONFIG.CANVAS_WIDTH / 2 - CONFIG.BAT_WIDTH / 2;
+                            batY = CONFIG.CANVAS_HEIGHT / 2 - CONFIG.BAT_HEIGHT / 2;
+                            if (lives <= 0) {
+                                gameState = STATE_GAME_OVER;
+                                backgroundMusic.pause();
+                            }
+                            break;
+                        }
+                    }
+
+                    for (let i = ghosts.length - 1; i >= 0; i--) {
+                        const ghost = ghosts[i];
+                        ghost.phaseTimer -= delta * 60;
+                        if (ghost.phaseTimer <= 0) {
+                            ghost.isPhased = !ghost.isPhased;
+                            ghost.phaseTimer = ghost.isPhased ? 60 : 120;
+                        }
+                        if (!ghost.isPhased) {
+                            const dx = ghost.targetX - ghost.x;
+                            const dy = ghost.targetY - ghost.y;
+                            const distance = Math.sqrt(dx * dx + dy * dy);
+                            if (distance > 5) {
+                                ghost.x += (dx / distance) * ghost.speed * delta * 60;
+                                ghost.y += (dy / distance) * ghost.speed * delta * 60;
+                            }
+                            if (Math.random() < 0.05) {
+                                ghost.targetX = batX;
+                                ghost.targetY = batY;
+                            }
+                        }
+                        ctx.globalAlpha = ghost.isPhased ? 0.4 : 1;
+                        if (ghostSprite.complete) {
+                            ctx.drawImage(ghostSprite, ghost.x, ghost.y, ghostWidth * scale, ghostHeight * scale);
+                        } else {
+                            ctx.fillStyle = 'white';
+                            ctx.fillRect(ghost.x, ghost.y, ghostWidth * scale, ghostHeight * scale);
+                        }
+                        ctx.globalAlpha = 1;
+                        if (ghost.x < -ghostWidth * scale) {
+                            recycleGhost(ghosts.splice(i, 1)[0]);
+                        } else if (invincibilityTimer <= 0 && !ghost.isPhased && checkCollision(batX, batY, CONFIG.BAT_WIDTH * scale, CONFIG.BAT_HEIGHT * scale, ghost.x, ghost.y, ghostWidth * scale, ghostHeight * scale)) {
+                            lives--;
+                            shakeTimer = 8;
+                            spiderSound.play().catch(e => console.error('Spider sound failed:', e));
+                            batX = CONFIG.CANVAS_WIDTH / 2 - CONFIG.BAT_WIDTH / 2;
+                            batY = CONFIG.CANVAS_HEIGHT / 2 - CONFIG.BAT_HEIGHT / 2;
+                            if (lives <= 0) {
+                                gameState = STATE_GAME_OVER;
+                                backgroundMusic.pause();
+                            }
+                            break;
+                        }
+                    }
+                } else if (boss) {
+                    boss.changeDirectionTimer -= delta * 60;
+                    if (boss.changeDirectionTimer <= 0) {
+                        boss.directionX = (Math.random() - 0.5) * boss.speed;
+                        boss.directionY = (Math.random() - 0.5) * boss.speed;
+                        boss.changeDirectionTimer = 30;
+                    }
+                    boss.x += boss.directionX * delta * 60;
+                    boss.y += boss.directionY * delta * 60;
+                    boss.x = Math.max(CONFIG.CANVAS_WIDTH / 2, Math.min(boss.x, CONFIG.CANVAS_WIDTH - bossWidth * scale));
+                    boss.y = Math.max(0, Math.min(boss.y, CONFIG.CANVAS_HEIGHT - bossHeight * scale));
+
+                    if (bossSprite.complete) {
+                        ctx.drawImage(bossSprite, boss.x, boss.y, bossWidth * scale, bossHeight * scale);
+                    } else {
+                        ctx.fillStyle = 'purple';
+                        ctx.fillRect(boss.x, boss.y, bossWidth * scale, bossHeight * scale);
+                    }
+
+                    const bossBarWidth = 300;
+                    const bossBarHeight = 20;
+                    const bossBarX = CONFIG.CANVAS_WIDTH / 2 - bossBarWidth / 2;
+                    const bossBarY = CONFIG.CANVAS_HEIGHT - 40;
+                    ctx.fillStyle = 'gray';
+                    ctx.fillRect(bossBarX, bossBarY, bossBarWidth, bossBarHeight);
+                    ctx.fillStyle = 'red';
+                    ctx.fillRect(bossBarX, bossBarY, (boss.health / bossMaxHealth) * bossBarWidth, bossBarHeight);
+                    ctx.strokeStyle = 'black';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(bossBarX, bossBarY, bossBarWidth, bossBarHeight);
+
+                    boss.shootTimer -= delta * 60;
+                    if (boss.shootTimer <= 0 && bossProjectiles.length < 4) {
+                        bossProjectiles.push({
+                            x: boss.x,
+                            y: boss.y + (bossHeight * scale / 2) - bossProjectileHeight / 2,
+                            speedX: -projectileSpeed * 0.7,
+                            speedY: 0
+                        });
+                        fireballSound.play().catch(e => console.error('Fireball sound failed:', e));
+                        boss.shootTimer = 90;
+                    }
+
+                    for (let i = bossProjectiles.length - 1; i >= 0; i--) {
+                        const p = bossProjectiles[i];
+                        p.x += p.speedX * delta * 60;
+                        p.y += p.speedY * delta * 60;
+                        if (fireballSprite.complete) {
+                            ctx.drawImage(fireballSprite, p.x, p.y, bossProjectileWidth, bossProjectileHeight);
+                        } else {
+                            ctx.fillStyle = 'orange';
+                            ctx.fillRect(p.x, p.y, bossProjectileWidth, bossProjectileHeight);
+                        }
+                        if (p.x < -bossProjectileWidth || p.x > CONFIG.CANVAS_WIDTH || p.y < -bossProjectileHeight || p.y > CONFIG.CANVAS_HEIGHT) {
+                            bossProjectiles.splice(i, 1);
+                            continue;
+                        }
+                        if (invincibilityTimer <= 0 && checkCollision(batX, batY, CONFIG.BAT_WIDTH * scale, CONFIG.BAT_HEIGHT * scale, p.x, p.y, bossProjectileWidth, bossProjectileHeight)) {
+                            lives--;
+                            shakeTimer = 8;
+                            spiderSound.play().catch(e => console.error('Spider sound failed:', e));
+                            batX = CONFIG.CANVAS_WIDTH / 2 - CONFIG.BAT_WIDTH / 2;
+                            batY = CONFIG.CANVAS_HEIGHT / 2 - CONFIG.BAT_HEIGHT / 2;
+                            bossProjectiles.splice(i, 1);
+                            if (lives <= 0) {
+                                gameState = STATE_GAME_OVER;
+                                bossMusic.pause();
+                            }
+                            break;
+                        }
+                    }
+                }
+
+                for (let i = powerUps.length - 1; i >= 0; i--) {
+                    const powerUp = powerUps[i];
+                    let sprite, glowColor;
+                    if (powerUp.type === 'speed') { sprite = powerUpSprite; glowColor = 'rgba(0, 255, 0, 0.5)'; }
+                    else if (powerUp.type === 'invincibility') { sprite = powerUpInvincibilitySprite; glowColor = 'rgba(0, 255, 255, 0.5)'; }
+                    else if (powerUp.type === 'doubleShot') { sprite = powerUpDoubleShotSprite; glowColor = 'rgba(255, 0, 255, 0.5)'; }
+                    ctx.shadowBlur = 25;
+                    ctx.shadowColor = glowColor;
+                    if (sprite.complete) {
+                        ctx.drawImage(sprite, powerUp.x, powerUp.y, powerUpWidth * coinScale, powerUpHeight * coinScale);
+                    } else {
+                        ctx.fillStyle = glowColor;
+                        ctx.fillRect(powerUp.x, powerUp.y, powerUpWidth * coinScale, powerUpHeight * coinScale);
+                    }
+                    ctx.shadowBlur = 0;
+                    if (checkCollision(batX, batY, CONFIG.BAT_WIDTH * scale, CONFIG.BAT_HEIGHT * scale, powerUp.x, powerUp.y, powerUpWidth * coinScale, powerUpHeight * coinScale)) {
+                        console.log(`Power-up collected: ${powerUp.type}`);
+                        powerUps.splice(i, 1);
+                        if (powerUp.type === 'speed') speedBoostTimer = powerUpDuration;
+                        else if (powerUp.type === 'invincibility') invincibilityTimer = powerUpDuration;
+                        else if (powerUp.type === 'doubleShot') doubleShotTimer = powerUpDuration;
+                        spawnParticles(powerUp.x, powerUp.y);
+                    }
+                }
+
+                if (level < 9) {
+                    if (coins.length < maxCoins && Math.random() < 0.015) spawnCoin();
+                    if (spiders.length < maxSpiders && Math.random() < 0.008 + level * 0.004) spawnSpider();
+                    if (wasps.length < maxWasps && Math.random() < 0.004 + level * 0.002) spawnWasp();
+                    if (ghosts.length < maxGhosts && Math.random() < 0.006 + level * 0.003) spawnGhost();
+                    if (powerUps.length < 1 && Math.random() < 0.008) spawnPowerUp();
+                }
+
+                for (let i = particles.length - 1; i >= 0; i--) {
+                    const p = particles[i];
+                    p.x += p.vx * delta * 60;
+                    p.y += p.vy * delta * 60;
+                    p.life -= delta * 60;
+                    if (p.life <= 0) {
+                        particles.splice(i, 1);
+                    } else {
+                        ctx.globalAlpha = p.life / p.maxLife;
+                        ctx.fillStyle = p.color;
+                        ctx.fillRect(p.x, p.y, p.size, p.size);
+                    }
+                }
+                ctx.globalAlpha = 1;
+
+                if (victoryFadeTimer > 0) {
+                    ctx.fillStyle = `rgba(0, 0, 0, ${1 - (victoryFadeTimer / 60)})`;
+                    ctx.fillRect(0, 0, CONFIG.CANVAS_WIDTH, CONFIG.CANVAS_HEIGHT);
+                    victoryFadeTimer--;
+                    if (victoryFadeTimer <= 0) {
+                        gameState = STATE_VICTORY;
+                    }
+                }
+
+                hudPulse += delta * 2;
+                const pulseScale = 0.7 + Math.sin(hudPulse) * 0.05;
+                ctx.fillStyle = `rgba(0, 0, 0, ${pulseScale})`;
+                ctx.fillRect(10, 10, 200, level >= 9 ? 110 : 170);
+                ctx.fillStyle = 'white';
+                ctx.font = '16px "Press Start 2P"';
+                ctx.textAlign = 'left';
+                ctx.fillText(`Coins: ${coinScore}`, 20, 30);
+                ctx.fillText(`Kills: ${killScore}`, 20, 50);
+                ctx.fillText(`Lives: ${lives}`, 20, 70);
+                ctx.fillText(`Level: ${level}`, 20, 90);
+                if (level < 9) {
+                    if (speedBoostTimer > 0) ctx.fillText(`Speed: ${Math.floor(speedBoostTimer / 60)}s`, 20, 110);
+                    if (invincibilityTimer > 0) ctx.fillText(`Inv: ${Math.floor(invincibilityTimer / 60)}s`, 20, 130);
+                    if (doubleShotTimer > 0) ctx.fillText(`DShot: ${Math.floor(doubleShotTimer / 60)}s`, 20, 150);
+                }
+            } else if (gameState === STATE_PAUSED) {
+                ctx.fillStyle = 'white';
+                ctx.font = '40px "Press Start 2P"';
+                ctx.textAlign = 'center';
+                ctx.fillText('Paused', CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 - 80);
+                ctx.font = '16px "Press Start 2P"';
+                ctx.fillText('P - Resume', CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 - 20);
+                ctx.fillText('R - Restart', CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 + 10);
+                ctx.fillText('Q - Shop', CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 + 40);
+            } else if (gameState === STATE_GAME_OVER) {
+                ctx.fillStyle = 'red';
+                ctx.font = '40px "Press Start 2P"';
+                ctx.textAlign = 'center';
+                ctx.fillText('Game Over!', CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2);
+                ctx.fillStyle = 'white';
+                ctx.font = '16px "Press Start 2P"';
+                ctx.fillText(`Coins: ${coinScore}`, CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 + 40);
+                ctx.fillText(`Kills: ${killScore}`, CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 + 70);
+                ctx.fillText(`Level: ${level}`, CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 + 100);
+                ctx.fillText('Press Enter to Shop', CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 + 130);
+            } else if (gameState === STATE_VICTORY) {
+                ctx.fillStyle = 'white';
+                ctx.font = '40px "Press Start 2P"';
+                ctx.textAlign = 'center';
+                ctx.fillText('Victory!', CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 - 80);
+                ctx.font = '16px "Press Start 2P"';
+                ctx.fillText(`Coins: ${coinScore}`, CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 - 20);
+                ctx.fillText(`Kills: ${killScore}`, CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 + 10);
+                ctx.fillText('Press Enter to Shop', CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 + 40);
+            } else if (gameState === STATE_INITIALS) {
+                ctx.fillStyle = 'white';
+                ctx.font = '40px "Press Start 2P"';
+                ctx.textAlign = 'center';
+                ctx.fillText('New High Score!', CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 - 80);
+                ctx.font = '30px "Press Start 2P"';
+                ctx.fillText(`${initials[0]} ${initials[1]} ${initials[2]}`, CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 - 20);
+                ctx.fillStyle = 'yellow';
+                ctx.fillText(initials[currentInitial], CONFIG.CANVAS_WIDTH / 2 - 40 + currentInitial * 40, CONFIG.CANVAS_HEIGHT / 2 - 20);
+                ctx.fillStyle = 'white';
+                ctx.font = '16px "Press Start 2P"';
+                ctx.fillText(`Coins: ${coinScore}`, CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 + 20);
+                ctx.fillText('Up/Down: Change Letter', CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 + 50);
+                ctx.fillText('Left/Right: Move', CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 + 80);
+                ctx.fillText('Enter: Confirm', CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 + 110);
+            } else if (gameState === STATE_SHOP) {
+                ctx.fillStyle = 'white';
+                ctx.font = '40px "Press Start 2P"';
+                ctx.textAlign = 'center';
+                ctx.fillText('Upgrades Shop', CONFIG.CANVAS_WIDTH / 2, 100);
+                ctx.font = '16px "Press Start 2P"';
+                ctx.fillText(`Coins: ${coinScore}`, CONFIG.CANVAS_WIDTH / 2, 140);
+
+                const upgradeKeys = ['speed', 'invincibility', 'projectile'];
+                const upgradeNames = ['Move Speed', 'Invincibility Time', 'Projectile Damage'];
+                for (let i = 0; i < upgradeKeys.length; i++) {
+                    const upgrade = upgrades[upgradeKeys[i]];
+                    ctx.fillStyle = i === selectedUpgrade ? 'yellow' : 'white';
+                    ctx.fillText(`${upgradeNames[i]} (Lv ${upgrade.level}/${upgrade.maxLevel}): ${upgrade.cost} Coins`, CONFIG.CANVAS_WIDTH / 2, 200 + i * 40);
+                }
+
+                ctx.fillStyle = 'white';
+                ctx.fillText('Up/Down: Select', CONFIG.CANVAS_WIDTH / 2, 340);
+                ctx.fillText('Enter: Buy', CONFIG.CANVAS_WIDTH / 2, 370);
+                ctx.fillText('C: Continue Game', CONFIG.CANVAS_WIDTH / 2, 400);
+                ctx.fillText('Q: Quit to Title', CONFIG.CANVAS_WIDTH / 2, 430);
+            }
+
+            ctx.restore();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function checkCollision(rect1X, rect1Y, rect1W, rect1H, rect2X, rect2Y, rect2W, rect2H) {
+            return (
+                rect1X < rect2X + rect2W &&
+                rect1X + rect1W > rect2X &&
+                rect1Y < rect2Y + rect2H &&
+                rect1Y + rect1H > rect2Y
+            );
+        }
+
+        // Asset loading with logging
+        Promise.all([
+            new Promise((resolve, reject) => { batSprite.onload = () => { console.log('batSprite loaded'); resolve(); }; batSprite.onerror = () => { console.error('batSprite failed'); reject(); }; }),
+            new Promise((resolve, reject) => { coinSprite.onload = () => { console.log('coinSprite loaded'); resolve(); }; coinSprite.onerror = () => { console.error('coinSprite failed'); reject(); }; }),
+            new Promise((resolve, reject) => { bgLayer1.onload = () => { console.log('bgLayer1 loaded'); resolve(); }; bgLayer1.onerror = () => { console.error('bgLayer1 failed'); reject(); }; }),
+            new Promise((resolve, reject) => { bgLayer2.onload = () => { console.log('bgLayer2 loaded'); resolve(); }; bgLayer2.onerror = () => { console.error('bgLayer2 failed'); reject(); }; }),
+            new Promise((resolve, reject) => { bgLayer3.onload = () => { console.log('bgLayer3 loaded'); resolve(); }; bgLayer3.onerror = () => { console.error('bgLayer3 failed'); reject(); }; }),
+            new Promise((resolve, reject) => { batBoltSprite.onload = () => { console.log('batBoltSprite loaded'); resolve(); }; batBoltSprite.onerror = () => { console.error('batBoltSprite failed'); reject(); }; }),
+            new Promise((resolve, reject) => { spiderSprites[0].onload = () => { console.log('spider1 loaded'); resolve(); }; spiderSprites[0].onerror = () => { console.error('spider1 failed'); reject(); }; }),
+            new Promise((resolve, reject) => { spiderSprites[1].onload = () => { console.log('spider2 loaded'); resolve(); }; spiderSprites[1].onerror = () => { console.error('spider2 failed'); reject(); }; }),
+            new Promise((resolve, reject) => { spiderSprites[2].onload = () => { console.log('spider3 loaded'); resolve(); }; spiderSprites[2].onerror = () => { console.error('spider3 failed'); reject(); }; }),
+            new Promise((resolve, reject) => { spiderSprites[3].onload = () => { console.log('spider4 loaded'); resolve(); }; spiderSprites[3].onerror = () => { console.error('spider4 failed'); reject(); }; }),
+            new Promise((resolve, reject) => { waspSprite.onload = () => { console.log('waspSprite loaded'); resolve(); }; waspSprite.onerror = () => { console.error('waspSprite failed'); reject(); }; }),
+            new Promise((resolve, reject) => { ghostSprite.onload = () => { console.log('ghostSprite loaded'); resolve(); }; ghostSprite.onerror = () => { console.error('ghostSprite failed'); reject(); }; }),
+            new Promise((resolve, reject) => { powerUpSprite.onload = () => { console.log('powerUpSprite loaded'); resolve(); }; powerUpSprite.onerror = () => { console.error('powerUpSprite failed'); reject(); }; }),
+            new Promise((resolve, reject) => { powerUpInvincibilitySprite.onload = () => { console.log('invincible loaded'); resolve(); }; powerUpInvincibilitySprite.onerror = () => { console.error('invincible failed'); reject(); }; }),
+            new Promise((resolve, reject) => { powerUpDoubleShotSprite.onload = () => { console.log('doubleshot loaded'); resolve(); }; powerUpDoubleShotSprite.onerror = () => { console.error('doubleshot failed'); reject(); }; }),
+            new Promise((resolve, reject) => { bossSprite.onload = () => { console.log('bossSprite loaded'); resolve(); }; bossSprite.onerror = () => { console.error('bossSprite failed'); reject(); }; }),
+            new Promise((resolve, reject) => { fireballSprite.onload = () => { console.log('fireballSprite loaded'); resolve(); }; fireballSprite.onerror = () => { console.error('fireballSprite failed'); reject(); }; }),
+            new Promise((resolve, reject) => { coinSound.oncanplaythrough = () => { console.log('coinSound loaded'); resolve(); }; coinSound.onerror = () => { console.error('coinSound failed'); reject(); }; }),
+            new Promise((resolve, reject) => { spiderSound.oncanplaythrough = () => { console.log('spiderSound loaded'); resolve(); }; spiderSound.onerror = () => { console.error('spiderSound failed'); reject(); }; }),
+            new Promise((resolve, reject) => { fireballSound.oncanplaythrough = () => { console.log('fireballSound loaded'); resolve(); }; fireballSound.onerror = () => { console.error('fireballSound failed'); reject(); }; }),
+            new Promise((resolve, reject) => { backgroundMusic.oncanplaythrough = () => { console.log('backgroundMusic loaded'); resolve(); }; backgroundMusic.onerror = () => { console.error('backgroundMusic failed'); reject(); }; }),
+            new Promise((resolve, reject) => { bossMusic.oncanplaythrough = () => { console.log('bossMusic loaded'); resolve(); }; bossMusic.onerror = () => { console.error('bossMusic failed'); reject(); }; })
+        ]).then(() => {
+            console.log('All critical assets loaded successfully');
+            resetGame();
+            requestAnimationFrame((ts) => { lastTime = ts; gameLoop(ts); });
+        }).catch((e) => {
+            console.error('Asset loading error:', e);
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, CONFIG.CANVAS_WIDTH, CONFIG.CANVAS_HEIGHT);
+            ctx.fillStyle = 'white';
+            ctx.font = '20px "Press Start 2P"';
+            ctx.textAlign = 'center';
+            ctx.fillText('Loading Failed - Check Console', CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2);
+            requestAnimationFrame((ts) => { lastTime = ts; gameLoop(ts); });
+        });
+    </script>
+</body>
+</html>
