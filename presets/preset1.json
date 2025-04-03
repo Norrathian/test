@@ -1,0 +1,1 @@
+{"fg_width": "", "fg_height": "", "bg_width": "", "bg_height": "", "text": "", "text_color": "white", "text_size": 24, "text_pos": "Top Left", "loop": false, "audio_source": "Foreground", "custom_audio_path": "", "green_lower": [0, 120, 0], "green_upper": [120, 255, 120], "dilation": 1, "format": "MP4", "fps": "24", "transition": false, "export_log": false}
